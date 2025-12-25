@@ -3,10 +3,9 @@
     Name     =  EitherAutoMouse
     Version  =     0.1.0
 ;==
-;=== Multiple mice, individual settings... + Keyboard Layer on Mouse Activity
-;===== Based on EitherMouse © 2009 - 2020 Steffen Software (www.EitherMouse.com)
-;===== AutoMouse layer functionality added by morganvenable
-;======  github.com/morganvenable/eitherautomouse
+;=== Multiple mice, individual settings... + Keyboard Layer
+;===== Based on EitherMouse © 2009 - 2020 Steffen Software
+;===== AutoMouse layer by morganvenable - github.com/morganvenable/eitherautomouse
 ;================================================================================
 
 ;Beta = 1
@@ -70,11 +69,6 @@ WM_INPUT(w,l)
   Loop, % MouseCount
    If (MouseName(ThisMouse) = Mouse%A_Index%)
     ToolTip, % Mouse%A_Index%Nick, , , % Mod(A_Index-1,20)+1
-
- ; AutoMouse: Activate layer on mouse activity if enabled
- If LayerEnabled
-  GoSub, LayerActivate
-
  Return 0
 }
 
@@ -441,17 +435,7 @@ Settings:
  MultiCursorTT  	:= (MultiCursorTT = "")  		? 0 		: MultiCursorTT
  IgnoreZeroDevice  	:= (IgnoreZeroDevice = "")  		? 1 		: IgnoreZeroDevice
  RunAsAdmin		:= (RunAsAdmin = "") 			? 0 		: RunAsAdmin
-
- ; AutoMouse Layer Settings
- RegRead, LayerEnabled, 	HKCU, Software\%Name%\Layer, 	Enabled
- RegRead, LayerTimeout, 	HKCU, Software\%Name%\Layer, 	Timeout
- LayerEnabled  		:= (LayerEnabled = "")  		? 1 		: LayerEnabled
- LayerTimeout  		:= (LayerTimeout = "")  		? 500 		: LayerTimeout
- LayerState := 0  ; 0=Normal, 1=Active, 2=Latched
- LayerLeftPressed := 0
- LayerRightPressed := 0
- LayerMiddlePressed := 0
-
+ 
  Loop, % MouseCount
  {
   RegRead, Mouse%A_Index%,        	HKCU, Software\%Name%\Mouse%A_Index%, Name
@@ -570,8 +554,6 @@ QuietSave:
  RegWrite, REG_SZ, HKCU, Software\%Name%\MultiCursor, MultiCursor,	% MultiCursor
  RegWrite, REG_SZ, HKCU, Software\%Name%\MultiCursor, MultiCursorTime,	% MultiCursorTime
  RegWrite, REG_SZ, HKCU, Software\%Name%\MultiCursor, MultiCursorTT,	% MultiCursorTT
- RegWrite, REG_SZ, HKCU, Software\%Name%\Layer, Enabled, 		% LayerEnabled
- RegWrite, REG_SZ, HKCU, Software\%Name%\Layer, Timeout, 		% LayerTimeout
  RegWrite, REG_SZ, HKCU, Software\%Name%, MouseCount, 			% MouseCount
  Loop, % MouseCount
  {
@@ -955,10 +937,6 @@ CreateMenus:
 
  Menu, Configure, Add, Start with Windows, ToggleStartWithWindows
  Menu, Configure, Icon, Start with Windows, %A_ScriptName%,37,16
- Menu, Configure, Add, Keyboard Layer (F/D/S=click), ToggleKeyboardLayer
- Menu, Configure, Icon, Keyboard Layer (F/D/S=click), %A_ScriptName%,16,16
- If LayerEnabled
-  Menu, Configure, Check, Keyboard Layer (F/D/S=click)
 
 
  Menu, Configure, Add, Cursors:, :Cursors
@@ -1536,178 +1514,6 @@ Return
 
 
 ;===================================================================================
-;=== AutoMouse Layer Hotkeys =======================================================
-;===================================================================================
-
-LayerActivate:
- If (LayerState = 0)
- {
-  LayerState := 1
-  Hotkey, *f, LayerKeyF, On
-  Hotkey, *f Up, LayerKeyFUp, On
-  Hotkey, *d, LayerKeyD, On
-  Hotkey, *d Up, LayerKeyDUp, On
-  Hotkey, *s, LayerKeyS, On
-  Hotkey, *s Up, LayerKeySUp, On
-  Hotkey, *e, LayerKeyE, On
-  Hotkey, *r, LayerKeyR, On
-  Hotkey, *x, LayerKeyX, On
-  Hotkey, *c, LayerKeyC, On
-  Hotkey, *v, LayerKeyV, On
- }
- ; Reset timeout timer
- If (LayerState = 1)
-  SetTimer, LayerTimeout, -%LayerTimeout%
-Return
-
-LayerDeactivate:
- If (LayerState <> 0)
- {
-  LayerState := 0
-  Hotkey, *f, Off
-  Hotkey, *f Up, Off
-  Hotkey, *d, Off
-  Hotkey, *d Up, Off
-  Hotkey, *s, Off
-  Hotkey, *s Up, Off
-  Hotkey, *e, Off
-  Hotkey, *r, Off
-  Hotkey, *x, Off
-  Hotkey, *c, Off
-  Hotkey, *v, Off
-  ; Release any held buttons
-  If LayerLeftPressed
-  {
-   Click, Up Left
-   LayerLeftPressed := 0
-  }
-  If LayerRightPressed
-  {
-   Click, Up Right
-   LayerRightPressed := 0
-  }
-  If LayerMiddlePressed
-  {
-   Click, Up Middle
-   LayerMiddlePressed := 0
-  }
-  SetTimer, LayerTimeout, Off
- }
-Return
-
-LayerTimeout:
- If (LayerState = 1)
-  GoSub, LayerDeactivate
-Return
-
-; F = Left Click
-LayerKeyF:
- If (LayerState = 0)
-  Return
- If (LayerState = 1)
-  SetTimer, LayerTimeout, -%LayerTimeout%
- Click, Down Left
- LayerLeftPressed := 1
-Return
-
-LayerKeyFUp:
- If LayerLeftPressed
- {
-  Click, Up Left
-  LayerLeftPressed := 0
- }
-Return
-
-; D = Middle Click
-LayerKeyD:
- If (LayerState = 0)
-  Return
- If (LayerState = 1)
-  SetTimer, LayerTimeout, -%LayerTimeout%
- Click, Down Middle
- LayerMiddlePressed := 1
-Return
-
-LayerKeyDUp:
- If LayerMiddlePressed
- {
-  Click, Up Middle
-  LayerMiddlePressed := 0
- }
-Return
-
-; S = Right Click
-LayerKeyS:
- If (LayerState = 0)
-  Return
- If (LayerState = 1)
-  SetTimer, LayerTimeout, -%LayerTimeout%
- Click, Down Right
- LayerRightPressed := 1
-Return
-
-LayerKeySUp:
- If LayerRightPressed
- {
-  Click, Up Right
-  LayerRightPressed := 0
- }
-Return
-
-; E = Scroll Up
-LayerKeyE:
- If (LayerState = 0)
-  Return
- If (LayerState = 1)
-  SetTimer, LayerTimeout, -%LayerTimeout%
- Click, WheelUp
-Return
-
-; R = Scroll Down
-LayerKeyR:
- If (LayerState = 0)
-  Return
- If (LayerState = 1)
-  SetTimer, LayerTimeout, -%LayerTimeout%
- Click, WheelDown
-Return
-
-; X = Cut
-LayerKeyX:
- If (LayerState = 0)
-  Return
- If (LayerState = 1)
-  SetTimer, LayerTimeout, -%LayerTimeout%
- Send, ^x
-Return
-
-; C = Copy
-LayerKeyC:
- If (LayerState = 0)
-  Return
- If (LayerState = 1)
-  SetTimer, LayerTimeout, -%LayerTimeout%
- Send, ^c
-Return
-
-; V = Paste
-LayerKeyV:
- If (LayerState = 0)
-  Return
- If (LayerState = 1)
-  SetTimer, LayerTimeout, -%LayerTimeout%
- Send, ^v
-Return
-
-; Escape exits layer
-#If (LayerState > 0)
-*Escape::
- GoSub, LayerDeactivate
-Return
-#If
-
-
-;===================================================================================
 ;=== Mouse Settings ================================================================
 ;===================================================================================
 
@@ -2246,18 +2052,6 @@ ToggleStartWithWindows:
 ;  FileCreateShortcut, "%A_ScriptFullPath%", %A_StartupCommon%\%Name%.lnk, %A_ScriptDir%
   Menu, Configure, Check, Start with Windows
  }
-Return
-
-ToggleKeyboardLayer:
- LayerEnabled := !LayerEnabled
- If LayerEnabled
-  Menu, Configure, Check, Keyboard Layer (F/D/S=click)
- Else
- {
-  Menu, Configure, Uncheck, Keyboard Layer (F/D/S=click)
-  GoSub, LayerDeactivate
- }
- GoSub, QuietSave
 Return
 
 
@@ -3255,3 +3049,50 @@ UpdateLayeredWindow(hwnd, hdc, x="", y="", w="", h="", Alpha=255) {
 	return DllCall("UpdateLayeredWindow", Ptr, hwnd, Ptr, 0, Ptr, ((x = "") && (y = "")) ? 0 : &pt, "int64*", w|h<<32, Ptr, hdc, "int64*", 0, "uint", 0, "UInt*", Alpha<<16|1<<24, "uint", 2)
 } ;=======================================================================================================
 
+
+
+;================================================================================
+;=== AutoMouse Keyboard Layer ==================================================
+;=== Press Ctrl+Alt+M to toggle layer mode =====================================
+;=== When active: F=LeftClick, D=MiddleClick, S=RightClick, E/R=Scroll =========
+;================================================================================
+
+LayerActive := 0
+
+^!m::
+ LayerActive := !LayerActive
+ If LayerActive
+  ToolTip, Layer ON (F/D/S=click), , , 20
+ Else
+  ToolTip, Layer OFF, , , 20
+ SetTimer, ClearLayerTip, -1500
+Return
+
+ClearLayerTip:
+ ToolTip, , , , 20
+Return
+
+#If LayerActive
+
+*f::Click, Down Left
+*f Up::Click, Up Left
+
+*d::Click, Middle
+
+*s::Click, Down Right
+*s Up::Click, Up Right
+
+*e::Send, {WheelUp}
+*r::Send, {WheelDown}
+
+*x::Send, ^x
+*c::Send, ^c
+*v::Send, ^v
+
+Escape::
+ LayerActive := 0
+ ToolTip, Layer OFF, , , 20
+ SetTimer, ClearLayerTip, -1500
+Return
+
+#If
