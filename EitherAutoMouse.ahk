@@ -450,24 +450,31 @@ CreateTrayMenu:
 Return
 
 UpdateTrayIcon() {
-    global LayerState, AppName
+    global LayerState, AppName, CurrentStatusText
+    static lastStatus := ""
 
     if (LayerState = 0) {
         ; Gray icon - normal
         Menu, Tray, Icon, Shell32.dll, 14  ; Gray mouse icon
         Menu, Tray, Tip, %AppName% - Layer: NORMAL
-        try Menu, Tray, Rename, Layer Status:%, Layer Status: NORMAL
+        newStatus := "Layer Status: NORMAL"
     } else if (LayerState = 1) {
         ; Green icon - active
         Menu, Tray, Icon, Shell32.dll, 3  ; Check/active icon
         Menu, Tray, Tip, %AppName% - Layer: ACTIVE
-        try Menu, Tray, Rename, Layer Status:%, Layer Status: ACTIVE
+        newStatus := "Layer Status: ACTIVE"
     } else if (LayerState = 2) {
         ; Yellow/locked icon - latched
         Menu, Tray, Icon, Shell32.dll, 48  ; Lock icon
         Menu, Tray, Tip, %AppName% - Layer: LATCHED
-        try Menu, Tray, Rename, Layer Status:%, Layer Status: LATCHED
+        newStatus := "Layer Status: LATCHED"
     }
+
+    ; Rename menu item if changed
+    if (lastStatus != "" && lastStatus != newStatus) {
+        try Menu, Tray, Rename, %lastStatus%, %newStatus%
+    }
+    lastStatus := newStatus
 }
 
 ShowAbout:
