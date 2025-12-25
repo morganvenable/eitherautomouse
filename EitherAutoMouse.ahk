@@ -23,98 +23,63 @@ SendMode Input
 ;===================================================================================
 
 ; Application info
-global AppName := "EitherAutoMouse"
-global AppVersion := "0.1.0"
+AppName := "EitherAutoMouse"
+AppVersion := "0.1.0"
 
 ; Mouse tracking
-global MouseCount := 0
-global ActiveMouse := 0
-global LastMouse := 0
-global LastActiveMouse := 0
+MouseCount := 0
+ActiveMouse := 0
+LastMouse := 0
+LastActiveMouse := 0
 
 ; Layer state: 0=Normal, 1=Active, 2=Latched
-global LayerState := 0
-global LayerTimeout := 500  ; ms
-global LayerExitOnOtherKey := true
-global LayerTimer := 0
+LayerState := 0
+LayerTimeout := 500  ; ms
+LayerExitOnOtherKey := 1
 
 ; Per-mouse layer enable (default all enabled)
-global Mouse1LayerEnabled := 1
-global Mouse2LayerEnabled := 1
-global Mouse3LayerEnabled := 1
-global Mouse4LayerEnabled := 1
-global Mouse5LayerEnabled := 1
+Mouse1LayerEnabled := 1
+Mouse2LayerEnabled := 1
+Mouse3LayerEnabled := 1
+Mouse4LayerEnabled := 1
+Mouse5LayerEnabled := 1
 
-; Key mappings (key -> action)
-; Actions: "left", "right", "middle", "scrollup", "scrolldown", "scrollleft", "scrollright"
-;          or keyboard shortcuts like "^c" for Ctrl+C
-global KeyMappings := {}
-
-; Track which keys are currently pressed (for proper release)
-global PressedKeys := {}
+; Track which mouse buttons are currently pressed
+LeftPressed := 0
+RightPressed := 0
+MiddlePressed := 0
 
 ; GUI state
-global GuiShown := false
-global SettingsKey := "HKCU\Software\EitherAutoMouse"
+GuiShown := 0
+SettingsKey := "HKCU\Software\EitherAutoMouse"
+
+; Key mappings stored as parallel arrays (v1 compatible)
+MapKeys := "f,d,s,e,r,x,c,v"
+MapActions := "left,middle,right,scrollup,scrolldown,^x,^c,^v"
 
 ;===================================================================================
 ;=== Initialization ================================================================
 ;===================================================================================
 
-Initialize:
-    ; Set default key mappings
-    SetDefaultMappings()
+GoSub, LoadSettings
+GoSub, CreateTrayMenu
+GoSub, RegisterMice
+GoSub, RegisterMessages
 
-    ; Load settings from registry
-    GoSub, LoadSettings
-
-    ; Create tray menu
-    GoSub, CreateTrayMenu
-
-    ; Register for raw input (mouse detection)
-    GoSub, RegisterMice
-
-    ; Register window messages
-    GoSub, RegisterMessages
-
-    ; Show startup notification
-    TrayTip, %AppName%, Started - Layer timeout: %LayerTimeout%ms, 2, 1
+TrayTip, %AppName%, Started - Layer timeout: %LayerTimeout%ms, 2, 1
 Return
-
-;===================================================================================
-;=== Default Key Mappings ==========================================================
-;===================================================================================
-
-SetDefaultMappings() {
-    global KeyMappings
-
-    ; Home row mouse buttons (left hand)
-    KeyMappings["f"] := "left"
-    KeyMappings["d"] := "middle"
-    KeyMappings["s"] := "right"
-
-    ; Scroll keys
-    KeyMappings["e"] := "scrollup"
-    KeyMappings["r"] := "scrolldown"
-
-    ; Clipboard shortcuts
-    KeyMappings["x"] := "^x"  ; Cut
-    KeyMappings["c"] := "^c"  ; Copy
-    KeyMappings["v"] := "^v"  ; Paste
-}
 
 ;===================================================================================
 ;=== Raw Input - Mouse Detection ===================================================
 ;===================================================================================
 
 RegisterMice:
-    ; Get list of mice using RawInput
+    ; Register for raw input from mice
     VarSetCapacity(RID, 8 + A_PtrSize, 0)
     NumPut(1, RID, 0, "UShort")  ; UsagePage = 1 (Generic Desktop)
     NumPut(2, RID, 2, "UShort")  ; Usage = 2 (Mouse)
     NumPut(0x00000100, RID, 4, "UInt")  ; RIDEV_INPUTSINK
     NumPut(A_ScriptHwnd, RID, 8, "Ptr")  ; hwndTarget
-
     DllCall("RegisterRawInputDevices", "Ptr", &RID, "UInt", 1, "UInt", 8 + A_PtrSize)
 Return
 
@@ -122,9 +87,9 @@ RegisterMessages:
     OnMessage(0x00FF, "WM_INPUT")  ; WM_INPUT
 Return
 
-WM_INPUT(wParam, lParam) {
-    global MouseCount, ActiveMouse, LastMouse, LastActiveMouse
-    global LayerState, LayerTimeout
+WM_INPUT(wParam, lParam)
+{
+    global MouseCount, ActiveMouse, LastMouse, LastActiveMouse, LayerState, LayerTimeout
 
     Critical
 
@@ -132,62 +97,68 @@ WM_INPUT(wParam, lParam) {
     DllCall("GetRawInputData", "Ptr", lParam, "UInt", 0x10000003, "Ptr", 0, "UInt*", size, "UInt", 8 + A_PtrSize*2)
     VarSetCapacity(raw, size, 0)
 
-    if (!DllCall("GetRawInputData", "Ptr", lParam, "UInt", 0x10000003, "Ptr", &raw, "UInt*", size, "UInt", 8 + A_PtrSize*2))
-        return 0
+    result := DllCall("GetRawInputData", "Ptr", lParam, "UInt", 0x10000003, "Ptr", &raw, "UInt*", size, "UInt", 8 + A_PtrSize*2)
+    if (!result)
+        Return 0
 
     ; Get device handle
     ThisMouse := NumGet(raw, 8, "Ptr")
 
     if (ThisMouse = 0)
-        return 0
+        Return 0
 
     ; Mouse activity detected - activate layer if this mouse has it enabled
     mouseIndex := GetMouseIndex(ThisMouse)
-    if (mouseIndex > 0) {
-        layerEnabledVar := "Mouse" . mouseIndex . "LayerEnabled"
-        if (%layerEnabledVar%) {
+    if (mouseIndex > 0)
+    {
+        layerEnabled := Mouse%mouseIndex%LayerEnabled
+        if (layerEnabled)
             ActivateLayer()
-        }
-    } else {
+    }
+    else
+    {
         ; New mouse - add it and activate layer
         AddNewMouse(ThisMouse)
         ActivateLayer()
     }
 
-    ; Track mouse change for EitherMouse functionality
-    if (LastMouse != ThisMouse) {
+    ; Track mouse change
+    if (LastMouse != ThisMouse)
+    {
         LastActiveMouse := ActiveMouse
         ActiveMouse := GetMouseIndex(ThisMouse)
         LastMouse := ThisMouse
-
-        ; Here you would apply per-mouse EitherMouse settings
-        ; (button swap, speed, etc.) - omitted for clarity
         GoSub, OnMouseChange
     }
 
-    return 0
+    Return 0
 }
 
-GetMouseIndex(handle) {
+GetMouseIndex(handle)
+{
     global MouseCount
-    Loop, %MouseCount% {
-        if (Mouse%A_Index%Handle = handle)
-            return A_Index
+    Loop, %MouseCount%
+    {
+        h := Mouse%A_Index%Handle
+        if (h = handle)
+            Return A_Index
     }
-    return 0
+    Return 0
 }
 
-GetMouseName(handle) {
+GetMouseName(handle)
+{
     ; Get device name from handle
     size := 0
     DllCall("GetRawInputDeviceInfo", "Ptr", handle, "UInt", 0x20000007, "Ptr", 0, "UInt*", size)
     VarSetCapacity(name, size * 2, 0)
     DllCall("GetRawInputDeviceInfo", "Ptr", handle, "UInt", 0x20000007, "Str", name, "UInt*", size)
-    return name
+    Return name
 }
 
-AddNewMouse(handle) {
-    global MouseCount
+AddNewMouse(handle)
+{
+    global MouseCount, SettingsKey, AppName
     MouseCount++
     Mouse%MouseCount%Handle := handle
     Mouse%MouseCount%Name := GetMouseName(handle)
@@ -196,19 +167,18 @@ AddNewMouse(handle) {
 
     ; Load per-mouse settings if they exist
     RegRead, nick, %SettingsKey%\Mouse%MouseCount%, Nick
-    if (nick)
+    if (!ErrorLevel && nick != "")
         Mouse%MouseCount%Nick := nick
 
     RegRead, layerEnabled, %SettingsKey%\Mouse%MouseCount%, LayerEnabled
-    if (layerEnabled != "")
+    if (!ErrorLevel)
         Mouse%MouseCount%LayerEnabled := layerEnabled
 
+    nick := Mouse%MouseCount%Nick
     TrayTip, %AppName%, New mouse detected: %nick%, 2, 1
 }
 
 OnMouseChange:
-    ; Placeholder for EitherMouse per-mouse settings application
-    ; This is where button swap, cursor style, speed, etc. would be applied
     UpdateTrayIcon()
 Return
 
@@ -216,171 +186,230 @@ Return
 ;=== Layer State Machine ===========================================================
 ;===================================================================================
 
-ActivateLayer() {
+ActivateLayer()
+{
     global LayerState, LayerTimeout
 
-    if (LayerState = 0) {
+    if (LayerState = 0)
+    {
         ; Transition from Normal to Active
         LayerState := 1
-        RegisterLayerHotkeys()
+        GoSub, EnableLayerHotkeys
         UpdateTrayIcon()
     }
 
     ; Reset/start timeout timer (unless latched)
-    if (LayerState = 1) {
+    if (LayerState = 1)
         SetTimer, LayerTimeoutHandler, -%LayerTimeout%
-    }
 }
 
-DeactivateLayer() {
-    global LayerState, PressedKeys
+DeactivateLayer()
+{
+    global LayerState
 
-    if (LayerState != 0) {
+    if (LayerState != 0)
+    {
         LayerState := 0
-        UnregisterLayerHotkeys()
+        GoSub, DisableLayerHotkeys
         ReleaseAllButtons()
         UpdateTrayIcon()
         SetTimer, LayerTimeoutHandler, Off
     }
 }
 
-LatchLayer() {
-    global LayerState
+LatchLayer()
+{
+    global LayerState, AppName
 
-    if (LayerState != 2) {
+    if (LayerState != 2)
+    {
         LayerState := 2
-        RegisterLayerHotkeys()
+        GoSub, EnableLayerHotkeys
         UpdateTrayIcon()
         SetTimer, LayerTimeoutHandler, Off
         TrayTip, %AppName%, Layer LATCHED - press Escape to exit, 2, 1
     }
 }
 
-UnlatchLayer() {
+UnlatchLayer()
+{
     global LayerState
 
-    if (LayerState = 2) {
+    if (LayerState = 2)
         DeactivateLayer()
-    }
 }
 
-ToggleLatch() {
+ToggleLatch()
+{
     global LayerState
 
-    if (LayerState = 2) {
+    if (LayerState = 2)
         UnlatchLayer()
-    } else {
+    else
         LatchLayer()
-    }
 }
 
 LayerTimeoutHandler:
-    if (LayerState = 1) {
+    if (LayerState = 1)
         DeactivateLayer()
-    }
 Return
 
 ;===================================================================================
-;=== Keyboard Layer Hotkeys ========================================================
+;=== Keyboard Layer Hotkeys (v1 compatible using labels) ===========================
 ;===================================================================================
 
-RegisterLayerHotkeys() {
-    global KeyMappings
+EnableLayerHotkeys:
+    Hotkey, *f, KeyF, On
+    Hotkey, *f Up, KeyFUp, On
+    Hotkey, *d, KeyD, On
+    Hotkey, *d Up, KeyDUp, On
+    Hotkey, *s, KeyS, On
+    Hotkey, *s Up, KeySUp, On
+    Hotkey, *e, KeyE, On
+    Hotkey, *r, KeyR, On
+    Hotkey, *x, KeyX, On
+    Hotkey, *c, KeyC, On
+    Hotkey, *v, KeyV, On
+Return
 
-    for key, action in KeyMappings {
-        ; Register key down
-        fn := Func("OnLayerKeyDown").Bind(key, action)
-        Hotkey, *%key%, %fn%, On
+DisableLayerHotkeys:
+    Hotkey, *f, Off
+    Hotkey, *f Up, Off
+    Hotkey, *d, Off
+    Hotkey, *d Up, Off
+    Hotkey, *s, Off
+    Hotkey, *s Up, Off
+    Hotkey, *e, Off
+    Hotkey, *r, Off
+    Hotkey, *x, Off
+    Hotkey, *c, Off
+    Hotkey, *v, Off
+Return
 
-        ; Register key up
-        fnUp := Func("OnLayerKeyUp").Bind(key, action)
-        Hotkey, *%key% Up, %fnUp%, On
-    }
-}
-
-UnregisterLayerHotkeys() {
-    global KeyMappings
-
-    for key, action in KeyMappings {
-        try {
-            Hotkey, *%key%, Off
-            Hotkey, *%key% Up, Off
-        }
-    }
-}
-
-OnLayerKeyDown(key, action) {
-    global LayerState, LayerTimeout, PressedKeys
-
+; Key handlers - F = Left Click
+KeyF:
     if (LayerState = 0)
-        return
+        Return
+    RefreshLayerTimeout()
+    Click, Down Left
+    LeftPressed := 1
+Return
 
-    ; Refresh timeout if active (not latched)
-    if (LayerState = 1) {
+KeyFUp:
+    if (LeftPressed)
+    {
+        Click, Up Left
+        LeftPressed := 0
+    }
+Return
+
+; D = Middle Click
+KeyD:
+    if (LayerState = 0)
+        Return
+    RefreshLayerTimeout()
+    Click, Down Middle
+    MiddlePressed := 1
+Return
+
+KeyDUp:
+    if (MiddlePressed)
+    {
+        Click, Up Middle
+        MiddlePressed := 0
+    }
+Return
+
+; S = Right Click
+KeyS:
+    if (LayerState = 0)
+        Return
+    RefreshLayerTimeout()
+    Click, Down Right
+    RightPressed := 1
+Return
+
+KeySUp:
+    if (RightPressed)
+    {
+        Click, Up Right
+        RightPressed := 0
+    }
+Return
+
+; E = Scroll Up
+KeyE:
+    if (LayerState = 0)
+        Return
+    RefreshLayerTimeout()
+    Click, WheelUp
+Return
+
+; R = Scroll Down
+KeyR:
+    if (LayerState = 0)
+        Return
+    RefreshLayerTimeout()
+    Click, WheelDown
+Return
+
+; X = Cut (Ctrl+X)
+KeyX:
+    if (LayerState = 0)
+        Return
+    RefreshLayerTimeout()
+    Send, ^x
+Return
+
+; C = Copy (Ctrl+C)
+KeyC:
+    if (LayerState = 0)
+        Return
+    RefreshLayerTimeout()
+    Send, ^c
+Return
+
+; V = Paste (Ctrl+V)
+KeyV:
+    if (LayerState = 0)
+        Return
+    RefreshLayerTimeout()
+    Send, ^v
+Return
+
+RefreshLayerTimeout()
+{
+    global LayerState, LayerTimeout
+    if (LayerState = 1)
         SetTimer, LayerTimeoutHandler, -%LayerTimeout%
-    }
-
-    ; Execute action
-    if (action = "left") {
-        Click, Down Left
-        PressedKeys["left"] := true
-    } else if (action = "right") {
-        Click, Down Right
-        PressedKeys["right"] := true
-    } else if (action = "middle") {
-        Click, Down Middle
-        PressedKeys["middle"] := true
-    } else if (action = "scrollup") {
-        Click, WheelUp
-    } else if (action = "scrolldown") {
-        Click, WheelDown
-    } else if (action = "scrollleft") {
-        Click, WheelLeft
-    } else if (action = "scrollright") {
-        Click, WheelRight
-    } else {
-        ; It's a keyboard shortcut - send it
-        Send, %action%
-    }
 }
 
-OnLayerKeyUp(key, action) {
-    global PressedKeys
+ReleaseAllButtons()
+{
+    global LeftPressed, RightPressed, MiddlePressed
 
-    ; Release mouse button if it was pressed
-    if (action = "left" && PressedKeys["left"]) {
+    if (LeftPressed)
+    {
         Click, Up Left
-        PressedKeys.Delete("left")
-    } else if (action = "right" && PressedKeys["right"]) {
+        LeftPressed := 0
+    }
+    if (RightPressed)
+    {
         Click, Up Right
-        PressedKeys.Delete("right")
-    } else if (action = "middle" && PressedKeys["middle"]) {
+        RightPressed := 0
+    }
+    if (MiddlePressed)
+    {
         Click, Up Middle
-        PressedKeys.Delete("middle")
+        MiddlePressed := 0
     }
-}
-
-ReleaseAllButtons() {
-    global PressedKeys
-
-    if (PressedKeys["left"]) {
-        Click, Up Left
-    }
-    if (PressedKeys["right"]) {
-        Click, Up Right
-    }
-    if (PressedKeys["middle"]) {
-        Click, Up Middle
-    }
-    PressedKeys := {}
 }
 
 ;===================================================================================
 ;=== Unmapped Key Detection ========================================================
 ;===================================================================================
 
-; This hook catches keys that are NOT in our mapping
-; If LayerExitOnOtherKey is true, exit the layer
+; Exit layer on unmapped keys (when active, not latched)
 #If (LayerState = 1 && LayerExitOnOtherKey)
 ~*a::
 ~*b::
@@ -415,14 +444,14 @@ ReleaseAllButtons() {
 ~*Tab::
 ~*Backspace::
     DeactivateLayer()
-return
+Return
 #If
 
 ; Escape always exits layer (even when latched)
 #If (LayerState > 0)
 *Escape::
     DeactivateLayer()
-return
+Return
 #If
 
 ;===================================================================================
@@ -449,32 +478,36 @@ CreateTrayMenu:
     UpdateTrayIcon()
 Return
 
-UpdateTrayIcon() {
-    global LayerState, AppName, CurrentStatusText
-    static lastStatus := ""
+UpdateTrayIcon()
+{
+    global LayerState, AppName
+    static lastStatus := "Layer Status: NORMAL"
 
-    if (LayerState = 0) {
-        ; Gray icon - normal
-        Menu, Tray, Icon, Shell32.dll, 14  ; Gray mouse icon
+    if (LayerState = 0)
+    {
+        Menu, Tray, Icon, Shell32.dll, 14
         Menu, Tray, Tip, %AppName% - Layer: NORMAL
         newStatus := "Layer Status: NORMAL"
-    } else if (LayerState = 1) {
-        ; Green icon - active
-        Menu, Tray, Icon, Shell32.dll, 3  ; Check/active icon
+    }
+    else if (LayerState = 1)
+    {
+        Menu, Tray, Icon, Shell32.dll, 3
         Menu, Tray, Tip, %AppName% - Layer: ACTIVE
         newStatus := "Layer Status: ACTIVE"
-    } else if (LayerState = 2) {
-        ; Yellow/locked icon - latched
-        Menu, Tray, Icon, Shell32.dll, 48  ; Lock icon
+    }
+    else if (LayerState = 2)
+    {
+        Menu, Tray, Icon, Shell32.dll, 48
         Menu, Tray, Tip, %AppName% - Layer: LATCHED
         newStatus := "Layer Status: LATCHED"
     }
 
     ; Rename menu item if changed
-    if (lastStatus != "" && lastStatus != newStatus) {
-        try Menu, Tray, Rename, %lastStatus%, %newStatus%
+    if (lastStatus != newStatus)
+    {
+        Menu, Tray, Rename, %lastStatus%, %newStatus%
+        lastStatus := newStatus
     }
-    lastStatus := newStatus
 }
 
 ShowAbout:
@@ -495,193 +528,139 @@ When you move your mouse, a keyboard layer activates:
 Layer times out after %LayerTimeout%ms of mouse inactivity.
 Press Escape to exit the layer at any time.
     )
-return
+Return
 
 ShowStatus:
-return
+Return
 
 ToggleLatchMenu:
     ToggleLatch()
-return
+Return
 
 ExitLayerMenu:
     DeactivateLayer()
-return
+Return
 
 ReloadScript:
     Reload
-return
+Return
 
 ExitApp:
     ExitApp
-return
+Return
 
 ;===================================================================================
 ;=== Settings GUI ==================================================================
 ;===================================================================================
 
 ShowSettings:
-    global GuiShown, LayerTimeout, LayerExitOnOtherKey, MouseCount
+    global GuiShown, LayerTimeout, LayerExitOnOtherKey, MouseCount, AppName
 
-    if (GuiShown) {
+    if (GuiShown)
+    {
         Gui, Settings:Show
-        return
+        Return
     }
 
-    Gui, Settings:New, +Resize, %AppName% Settings
+    Gui, Settings:Destroy
+    Gui, Settings:+Resize
     Gui, Settings:Add, Text, x10 y10 w380 h20, Layer Settings
     Gui, Settings:Add, Text, x10 y35 w100 h20, Timeout (ms):
     Gui, Settings:Add, Edit, x120 y33 w80 h20 vLayerTimeoutEdit, %LayerTimeout%
     Gui, Settings:Add, CheckBox, x10 y60 w200 h20 vExitOnOtherKeyCheck Checked%LayerExitOnOtherKey%, Exit layer on unmapped key
 
-    Gui, Settings:Add, Text, x10 y95 w380 h20, Key Mappings (key = action):
-
-    ; Build mappings text
-    mappingsText := ""
-    for key, action in KeyMappings {
-        mappingsText .= key . " = " . action . "`n"
-    }
-    Gui, Settings:Add, Edit, x10 y115 w380 h120 vMappingsEdit, %mappingsText%
-
-    Gui, Settings:Add, Text, x10 y245 w380 h40,
+    Gui, Settings:Add, Text, x10 y95 w380 h20, Key Mappings:
+    Gui, Settings:Add, Text, x10 y115 w380 h80,
     (
-Actions: left, right, middle, scrollup, scrolldown, scrollleft, scrollright
-Shortcuts: ^c (Ctrl+C), ^x (Ctrl+X), ^v (Ctrl+V), etc.
+F = Left Click    D = Middle Click    S = Right Click
+E = Scroll Up     R = Scroll Down
+X = Cut           C = Copy            V = Paste
+
+(Edit EitherAutoMouse.ahk to change mappings)
     )
 
     ; Per-mouse layer enable
-    Gui, Settings:Add, Text, x10 y295 w380 h20, Per-Mouse Layer Enable:
-    yPos := 315
-    Loop, %MouseCount% {
+    Gui, Settings:Add, Text, x10 y205 w380 h20, Per-Mouse Layer Enable:
+    yPos := 225
+    Loop, %MouseCount%
+    {
         nick := Mouse%A_Index%Nick
         enabled := Mouse%A_Index%LayerEnabled
         Gui, Settings:Add, CheckBox, x10 y%yPos% w300 h20 vMouse%A_Index%LayerCheck Checked%enabled%, %nick% - Layer enabled
         yPos += 25
     }
 
+    yPos += 10
     Gui, Settings:Add, Button, x10 y%yPos% w100 h30 gSaveSettings, Save
     Gui, Settings:Add, Button, x120 y%yPos% w100 h30 gCancelSettings, Cancel
 
-    GuiShown := true
-    Gui, Settings:Show, w400
-return
+    GuiShown := 1
+    Gui, Settings:Show, w400, %AppName% Settings
+Return
 
 SaveSettings:
     Gui, Settings:Submit, NoHide
 
     ; Update timeout
-    if (LayerTimeoutEdit > 0) {
+    if (LayerTimeoutEdit > 0)
         LayerTimeout := LayerTimeoutEdit
-    }
 
     ; Update exit on other key
     LayerExitOnOtherKey := ExitOnOtherKeyCheck
 
-    ; Parse and update mappings
-    KeyMappings := {}
-    Loop, Parse, MappingsEdit, `n, `r
-    {
-        if (A_LoopField = "")
-            continue
-        parts := StrSplit(A_LoopField, "=")
-        if (parts.Length() >= 2) {
-            key := Trim(parts[1])
-            action := Trim(parts[2])
-            if (key && action) {
-                KeyMappings[key] := action
-            }
-        }
-    }
-
     ; Update per-mouse settings
-    Loop, %MouseCount% {
-        checkVar := "Mouse" . A_Index . "LayerCheck"
-        Mouse%A_Index%LayerEnabled := %checkVar%
-    }
-
-    ; Re-register hotkeys if layer is active
-    if (LayerState > 0) {
-        UnregisterLayerHotkeys()
-        RegisterLayerHotkeys()
+    Loop, %MouseCount%
+    {
+        GuiControlGet, checkVal,, Mouse%A_Index%LayerCheck
+        Mouse%A_Index%LayerEnabled := checkVal
     }
 
     ; Save to registry
     GoSub, SaveSettingsToRegistry
 
     Gui, Settings:Destroy
-    GuiShown := false
+    GuiShown := 0
 
     TrayTip, %AppName%, Settings saved, 2, 1
-return
+Return
 
 CancelSettings:
-    Gui, Settings:Destroy
-    GuiShown := false
-return
-
 SettingsGuiClose:
+SettingsGuiEscape:
     Gui, Settings:Destroy
-    GuiShown := false
-return
+    GuiShown := 0
+Return
 
 ;===================================================================================
 ;=== Settings Persistence (Registry) ===============================================
 ;===================================================================================
 
 LoadSettings:
-    global LayerTimeout, LayerExitOnOtherKey, KeyMappings, SettingsKey
+    global LayerTimeout, LayerExitOnOtherKey, SettingsKey
 
     ; Load layer settings
     RegRead, timeout, %SettingsKey%, LayerTimeout
-    if (timeout > 0)
+    if (!ErrorLevel && timeout > 0)
         LayerTimeout := timeout
 
     RegRead, exitOnOther, %SettingsKey%, ExitOnOtherKey
-    if (exitOnOther != "")
+    if (!ErrorLevel)
         LayerExitOnOtherKey := exitOnOther
-
-    ; Load key mappings
-    RegRead, mappingsStr, %SettingsKey%, KeyMappings
-    if (mappingsStr) {
-        KeyMappings := {}
-        Loop, Parse, mappingsStr, |
-        {
-            parts := StrSplit(A_LoopField, ":")
-            if (parts.Length() >= 2) {
-                KeyMappings[parts[1]] := parts[2]
-            }
-        }
-    }
 Return
 
 SaveSettingsToRegistry:
-    global LayerTimeout, LayerExitOnOtherKey, KeyMappings, SettingsKey, MouseCount
+    global LayerTimeout, LayerExitOnOtherKey, SettingsKey, MouseCount
 
     ; Save layer settings
     RegWrite, REG_DWORD, %SettingsKey%, LayerTimeout, %LayerTimeout%
     RegWrite, REG_DWORD, %SettingsKey%, ExitOnOtherKey, %LayerExitOnOtherKey%
 
-    ; Save key mappings as pipe-separated string
-    mappingsStr := ""
-    for key, action in KeyMappings {
-        if (mappingsStr)
-            mappingsStr .= "|"
-        mappingsStr .= key . ":" . action
-    }
-    RegWrite, REG_SZ, %SettingsKey%, KeyMappings, %mappingsStr%
-
     ; Save per-mouse settings
-    Loop, %MouseCount% {
+    Loop, %MouseCount%
+    {
         nick := Mouse%A_Index%Nick
         layerEnabled := Mouse%A_Index%LayerEnabled
         RegWrite, REG_SZ, %SettingsKey%\Mouse%A_Index%, Nick, %nick%
         RegWrite, REG_DWORD, %SettingsKey%\Mouse%A_Index%, LayerEnabled, %layerEnabled%
     }
 Return
-
-;===================================================================================
-;=== Startup =======================================================================
-;===================================================================================
-
-GoSub, Initialize
-return
