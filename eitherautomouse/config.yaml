@@ -1,0 +1,66 @@
+# EitherAutoMouse Configuration
+#
+# This file controls how the mouse layer works.
+# When you move your mouse/trackball, a temporary "layer" activates
+# that turns specified keys into mouse actions.
+
+# Device Selection
+# Set to true to accept input from any mouse/keyboard
+any_pointing_device: true
+any_keyboard: true
+
+# Specific devices can be configured here (optional)
+# If any_pointing_device/any_keyboard is true, these are ignored
+devices: {}
+  # Example:
+  # my_trackball:
+  #   vid: "0x046D"
+  #   pid: "0xC52B"
+  #   role: mouse
+  # my_keyboard:
+  #   vid: "0x1234"
+  #   pid: "0x5678"
+  #   role: keyboard
+
+# Layer Configuration
+layer:
+  # How long (in milliseconds) before the layer deactivates after
+  # the last mouse movement. Default: 500ms
+  timeout_ms: 500
+
+  # If true, pressing any unmapped key will immediately exit the layer
+  # This is useful to prevent accidental key blocking when typing
+  exit_on_other_key: true
+
+  # Key Mappings
+  # Maps keyboard keys to mouse actions when the layer is active
+  #
+  # Available mouse actions:
+  #   - left_click    : Primary mouse button
+  #   - right_click   : Secondary mouse button
+  #   - middle_click  : Middle mouse button
+  #   - scroll_up     : Scroll wheel up
+  #   - scroll_down   : Scroll wheel down
+  #   - scroll_left   : Horizontal scroll left
+  #   - scroll_right  : Horizontal scroll right
+  #
+  # Keyboard shortcuts can also be specified:
+  #   - ctrl+c, ctrl+v, ctrl+x, etc.
+  #
+  # Tip: Modifier keys (Shift, Ctrl, Alt) work naturally with mapped keys.
+  #      Hold Shift while pressing 'f' to drag-select, for example.
+
+  mappings:
+    # Home row mouse buttons (left hand position)
+    f: left_click      # Index finger - primary click
+    d: middle_click    # Middle finger - middle click
+    s: right_click     # Ring finger - right click
+
+    # Scroll actions (above home row)
+    e: scroll_up       # Scroll up
+    r: scroll_down     # Scroll down
+
+    # Clipboard shortcuts (convenient during mouse operations)
+    x: ctrl+x          # Cut
+    c: ctrl+c          # Copy
+    v: ctrl+v          # Paste
