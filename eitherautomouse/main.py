@@ -207,7 +207,8 @@ class EitherAutoMouse:
 
     def _create_tray_menu(self) -> "pystray.Menu":
         """Create the system tray context menu."""
-        def get_status():
+        def get_status(item):
+            # pystray passes the menu item as argument to dynamic text functions
             if self.state_machine:
                 return f"Status: {self.state_machine.state.name}"
             return "Status: Unknown"
