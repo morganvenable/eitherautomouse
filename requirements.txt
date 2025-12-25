@@ -1,0 +1,9 @@
+# EitherAutoMouse Dependencies
+# Mouse-activated keyboard layer for mouse actions
+
+pynput>=1.7.6          # Mouse movement detection and control
+hidapi>=0.14.0         # HID device enumeration
+pystray>=0.19.5        # System tray icon
+Pillow>=10.0.0         # Icon image generation
+PyYAML>=6.0            # Configuration file parsing
+keyboard>=0.13.5       # Keyboard hook and control
