@@ -1,127 +1,142 @@
 # EitherAutoMouse
 
-**Mouse-activated keyboard layer for mouse actions**
+**EitherMouse + AutoMouse: Per-mouse settings with keyboard layer activation**
 
-EitherAutoMouse combines the concepts from [EitherMouse](https://github.com/gwarble/EitherMouse) (per-device settings) and [AutoMouse](https://github.com/morganvenable/automouse) (keyboard layer activation on mouse movement) to provide a seamless way to perform mouse actions from the keyboard when a pointing device is active.
+EitherAutoMouse extends [EitherMouse](https://github.com/gwarble/EitherMouse)'s per-device mouse management with [AutoMouse](https://github.com/morganvenable/automouse)'s keyboard layer functionality.
 
-## How It Works
+## What It Does
 
-When you move your mouse or trackball, a temporary "layer" activates on your keyboard. While active, certain keys become mouse buttons:
+When you move your mouse, a temporary keyboard "layer" activates that turns home-row keys into mouse actions:
 
 | Key | Action |
 |-----|--------|
 | `F` | Left Click |
-| `S` | Right Click |
 | `D` | Middle Click |
+| `S` | Right Click |
 | `E` | Scroll Up |
 | `R` | Scroll Down |
 | `X` | Cut (Ctrl+X) |
 | `C` | Copy (Ctrl+C) |
 | `V` | Paste (Ctrl+V) |
 
-The layer automatically deactivates after 500ms of mouse inactivity, or immediately when you press any other key.
+The layer automatically deactivates after 500ms of mouse inactivity, or immediately when you press any unmapped key.
 
-**Modifier keys work naturally!** Hold `Shift` while pressing `F` to drag-select, or `Ctrl+F` for a Ctrl+Click.
+**Modifiers work naturally!** Hold `Shift` while pressing `F` to drag-select.
+
+## Features
+
+### From EitherMouse
+- **RawInput mouse detection** - Identifies individual mice by hardware handle
+- **Per-mouse settings** - Each mouse can have its own configuration
+- **Registry persistence** - Settings survive restarts
+
+### From AutoMouse
+- **Keyboard layer activation** - Mouse movement triggers the layer
+- **Configurable timeout** - Layer auto-deactivates after inactivity
+- **Exit on unmapped key** - Typing normal keys exits the layer
+- **Latch mode** - Lock the layer active until explicitly disabled
+
+### Combined
+- **Per-mouse layer enable** - Enable/disable the keyboard layer for each mouse independently
+- **Settings GUI** - Configure everything through a graphical interface
+- **System tray** - Status icon and quick controls
 
 ## Installation
 
-### From Source
+### Requirements
+- Windows 7/8/10/11
+- [AutoHotkey v1.1+](https://www.autohotkey.com/)
 
-```bash
-# Clone the repository
-git clone https://github.com/morganvenable/eitherautomouse.git
-cd eitherautomouse
+### Setup
+1. Install AutoHotkey
+2. Download `EitherAutoMouse.ahk`
+3. Double-click to run, or right-click → "Run as Administrator" for full functionality
+4. (Optional) Add to Startup folder for auto-launch
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Run
-python -m eitherautomouse
+### Compile to EXE
+```
+Right-click EitherAutoMouse.ahk → Compile Script
 ```
 
-### Using pip (coming soon)
+## Usage
 
-```bash
-pip install eitherautomouse
-eitherautomouse
-```
+### Tray Icon
+- **Gray**: Layer inactive (normal keyboard)
+- **Green/Check**: Layer active (keys mapped to mouse actions)
+- **Lock**: Layer latched (stays active until Escape)
 
-## Requirements
+### Tray Menu
+- **Toggle Latch** - Lock/unlock the layer
+- **Exit Layer** - Immediately deactivate the layer
+- **Settings** - Open configuration GUI
+- **Reload** - Restart the script
+- **Exit** - Close the application
 
-- Windows (primary platform)
-- Python 3.9+
-- Administrator privileges (required for keyboard hooks)
+### Keyboard Shortcuts
+- `Escape` - Exit the layer (works even when latched)
 
 ## Configuration
 
-Configuration is stored in a YAML file:
+Right-click tray icon → **Settings** to configure:
 
-- **Windows**: `%APPDATA%\EitherAutoMouse\config.yaml`
-- **macOS**: `~/Library/Application Support/EitherAutoMouse/config.yaml`
-- **Linux**: `~/.config/eitherautomouse/config.yaml`
+### Layer Settings
+- **Timeout (ms)**: How long until layer deactivates (default: 500)
+- **Exit on unmapped key**: Whether pressing unmapped keys exits the layer
 
-A default configuration is created on first run. You can edit it to customize:
-
-- **Key mappings**: Change which keys trigger which mouse actions
-- **Timeout**: How long the layer stays active after mouse movement
-- **Exit behavior**: Whether unmapped keys should deactivate the layer
-
-### Example Configuration
-
-```yaml
-any_pointing_device: true
-any_keyboard: true
-
-layer:
-  timeout_ms: 500
-  exit_on_other_key: true
-
-  mappings:
-    f: left_click
-    d: middle_click
-    s: right_click
-    e: scroll_up
-    r: scroll_down
-    x: ctrl+x
-    c: ctrl+c
-    v: ctrl+v
+### Key Mappings
+Edit mappings in format `key = action`:
+```
+f = left
+d = middle
+s = right
+e = scrollup
+r = scrolldown
+x = ^x
+c = ^c
+v = ^v
 ```
 
-## System Tray
+**Available actions:**
+- `left`, `right`, `middle` - Mouse buttons
+- `scrollup`, `scrolldown`, `scrollleft`, `scrollright` - Scroll wheel
+- `^c`, `^v`, `^x`, etc. - Keyboard shortcuts (^ = Ctrl)
 
-EitherAutoMouse runs in your system tray with a mouse icon:
+### Per-Mouse Enable
+Enable or disable the keyboard layer for each detected mouse individually. Useful if you want the layer only for your trackball but not your regular mouse.
 
-- **Gray icon**: Layer inactive (normal keyboard operation)
-- **Green icon**: Layer active (keys are mapped to mouse actions)
+## Registry
 
-Right-click the icon for options:
-- Toggle Latch (keep layer active until explicitly disabled)
-- Exit Layer
-- Show connected devices
-- Open/reload configuration
-- Exit application
+Settings are stored in:
+```
+HKEY_CURRENT_USER\Software\EitherAutoMouse
+```
 
-## Use Cases
+## Architecture
 
-- **Reduce hand movement**: Keep your hands on the keyboard while navigating
-- **RSI prevention**: Minimize switching between mouse and keyboard
-- **Trackball users**: Natural integration with thumb-operated trackballs
-- **Accessibility**: Alternative input method for those who find mice difficult
+```
+EitherAutoMouse.ahk
+├── RawInput Mouse Detection
+│   └── WM_INPUT handler detects mouse movement
+├── Layer State Machine
+│   ├── NORMAL (0) - Keyboard works normally
+│   ├── ACTIVE (1) - Keys mapped to mouse actions, timeout active
+│   └── LATCHED (2) - Keys mapped, no timeout
+├── Hotkey Management
+│   ├── Register/unregister based on state
+│   └── Per-key action execution
+├── Per-Mouse Configuration
+│   └── Enable/disable layer per device
+├── Settings GUI
+│   └── Tkinter-style configuration panel
+└── Registry Persistence
+    └── Save/load settings on startup
+```
 
-## Dependencies
+## Credits
 
-- `pynput` - Mouse control and monitoring
-- `keyboard` - Keyboard hooking and control
-- `hidapi` - HID device enumeration
-- `pystray` - System tray integration
-- `Pillow` - Icon generation
-- `PyYAML` - Configuration file parsing
+- [EitherMouse](https://github.com/gwarble/EitherMouse) by Steffen Software - RawInput mouse detection, per-device architecture
+- [AutoMouse](https://github.com/morganvenable/automouse) by morganvenable - Keyboard layer concept
 
 ## License
 
 MIT License - See [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-- [EitherMouse](https://github.com/gwarble/EitherMouse) by Steffen Software - Inspiration for per-device mouse settings
-- [AutoMouse](https://github.com/morganvenable/automouse) - Original keyboard layer concept
