@@ -71,8 +71,8 @@ WM_INPUT(w,l)
    If (MouseName(ThisMouse) = Mouse%A_Index%)
     ToolTip, % Mouse%A_Index%Nick, , , % Mod(A_Index-1,20)+1
 
- ; AutoMouse: Activate layer on mouse activity if enabled for this mouse
- If (LayerEnabled && Mouse%ActiveMouse%Layer)
+ ; AutoMouse: Activate layer on mouse activity if enabled
+ If LayerEnabled
   GoSub, LayerActivate
 
  Return 0
@@ -325,11 +325,6 @@ UpdateGui:
      GuiControl,10:, Double, % Mouse%A_Index%Double
      GuiControl,10:, DoubleT,  % "Double Click Speed: " Mouse%ActiveMouse%Double
     }
-    If (MouseGUILastLayer = "") OR (Mouse%A_Index%Layer <> MouseGUILastLayer)
-    {
-     MouseGUILastLayer := Mouse%A_Index%Layer
-     GuiControl,10:, LayerCB, % Mouse%A_Index%Layer
-    }
 Return
 
 
@@ -404,7 +399,7 @@ Settings:
  If RunAsAdmin 
   RunAsAdmin()
 
- GuiH := 533
+ GuiH := 508
  GuiW := 190
  _16 := Round( 16 / dpi() )
  _11 := Round( 11 / dpi() )
@@ -475,7 +470,6 @@ Settings:
   RegRead, Mouse%A_Index%Double,  	HKCU, Software\%Name%\Mouse%A_Index%, Double
   RegRead, Mouse%A_Index%Wheel,   	HKCU, Software\%Name%\Mouse%A_Index%, Wheel
   RegRead, Mouse%A_Index%Icon,    	HKCU, Software\%Name%\Mouse%A_Index%, Icon
-  RegRead, Mouse%A_Index%Layer,    	HKCU, Software\%Name%\Mouse%A_Index%, Layer
 
   Mouse%A_Index%Speed      :=  (Mouse%A_Index%Speed      = "") 					? Speed  	: Mouse%A_Index%Speed
   Mouse%A_Index%Double     := ((Mouse%A_Index%Double     = 0) OR (Mouse%A_Index%Double = "")) 	? Double 	: Mouse%A_Index%Double
@@ -486,7 +480,6 @@ Settings:
   Mouse%A_Index%ClickLock  :=  (Mouse%A_Index%ClickLock  = "")  				? ClickLock  	: Mouse%A_Index%ClickLock
   Mouse%A_Index%WheelClick :=  (Mouse%A_Index%WheelClick = "")  				? 0  	 	: Mouse%A_Index%WheelClick
   Mouse%A_Index%SnapTo     :=  (Mouse%A_Index%SnapTo     = "")  				? SnapTo  	: Mouse%A_Index%SnapTo
-  Mouse%A_Index%Layer      :=  (Mouse%A_Index%Layer      = "")  				? 1  	 	: Mouse%A_Index%Layer
  }
  If MultiCursor
   pToken := Gdip_Startup()
@@ -598,7 +591,6 @@ QuietSave:
   RegWrite, REG_SZ, HKCU, Software\%Name%\Mouse%A_Index%, Double, 	% Mouse%A_Index%Double
   RegWrite, REG_SZ, HKCU, Software\%Name%\Mouse%A_Index%, Wheel,  	% Mouse%A_Index%Wheel
   RegWrite, REG_SZ, HKCU, Software\%Name%\Mouse%A_Index%, Icon,   	% Mouse%A_Index%Icon
-  RegWrite, REG_SZ, HKCU, Software\%Name%\Mouse%A_Index%, Layer,  	% Mouse%A_Index%Layer
  }
 Return
 
@@ -963,6 +955,10 @@ CreateMenus:
 
  Menu, Configure, Add, Start with Windows, ToggleStartWithWindows
  Menu, Configure, Icon, Start with Windows, %A_ScriptName%,37,16
+ Menu, Configure, Add, Keyboard Layer (F/D/S=click), ToggleKeyboardLayer
+ Menu, Configure, Icon, Keyboard Layer (F/D/S=click), %A_ScriptName%,16,16
+ If LayerEnabled
+  Menu, Configure, Check, Keyboard Layer (F/D/S=click)
 
 
  Menu, Configure, Add, Cursors:, :Cursors
@@ -1120,14 +1116,12 @@ GuiShow_:
  Gui, 10:Add, CheckBox, x35  y452 w145 R1  -Wrap   vSnapToCB  gMainContextMenu BackgroundTrans Checked%_c%, % "Snap To Default Button"
  _c := Mouse%ActiveMouse%WheelClick +0
  Gui, 10:Add, CheckBox, x35  y477 w145 R1  -Wrap   vWheelClickCB  gMainContextMenu BackgroundTrans Checked%_c%, % "Disable Wheel Click"
- _c := Mouse%ActiveMouse%Layer +0
- Gui, 10:Add, CheckBox, x35  y502 w145 R1  -Wrap   vLayerCB  gMainContextMenu BackgroundTrans Checked%_c%, % "Enable Keyboard Layer"
 
  Gui, 10:Add, Picture, x163 y140 w16  h16  vTrayIconMenu   AltSubmit gMainContextMenu Icon1,  %A_ScriptName%
 ;  Gui, 10:Add, Picture, x168 y52  w%_11%  h%_11%  vGuiMoreConfig AltSubmit gGuiMore Icon25,  %A_ScriptName%
 
  Gui, 10:Add, GroupBox, x6   y51  w179 h75  vGroupConfig   +0x4000000, Configure:
- Gui, 10:Add, GroupBox, x6   y141 w179 h383 vGroupSettings +0x4000000, % "Settings of:                                     "
+ Gui, 10:Add, GroupBox, x6   y141 w179 h358 vGroupSettings +0x4000000, % "Settings of:                                     "
 
  Gui, 10:Add, Picture,  x4   y2   w48  h48  vName___ Icon1  gShowConfigMenu vLogo, %A_ScriptName%
  Gui, 10:Font, s12 w800
@@ -1352,11 +1346,6 @@ QuickEpp:
  GuiControl, 10:, EppCB, % Mouse%ActiveMouse%Epp
  GoSub, QuietSave
 Return
-QuickLayer:
- Mouse%ActiveMouse%Layer := !Mouse%ActiveMouse%Layer
- GuiControl, 10:, LayerCB, % Mouse%ActiveMouse%Layer
- GoSub, QuietSave
-Return
 
 
 MainContextMenu:
@@ -1384,8 +1373,6 @@ MainContextMenu:
   GoSub, QuickWheelClick
  Else If (A_GuiControl = "SnapToCB")
   GoSub, QuickSnapTo
- Else If (A_GuiControl = "LayerCB")
-  GoSub, QuickLayer
  Else If (A_GuiControl = "Name___") OR (A_GuiControl = "GuiGear")
   GoSub, ShowConfigMenu
  Else If (A_GuiControl = "GuiHelp")
@@ -2259,6 +2246,18 @@ ToggleStartWithWindows:
 ;  FileCreateShortcut, "%A_ScriptFullPath%", %A_StartupCommon%\%Name%.lnk, %A_ScriptDir%
   Menu, Configure, Check, Start with Windows
  }
+Return
+
+ToggleKeyboardLayer:
+ LayerEnabled := !LayerEnabled
+ If LayerEnabled
+  Menu, Configure, Check, Keyboard Layer (F/D/S=click)
+ Else
+ {
+  Menu, Configure, Uncheck, Keyboard Layer (F/D/S=click)
+  GoSub, LayerDeactivate
+ }
+ GoSub, QuietSave
 Return
 
 
